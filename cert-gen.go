@@ -1,4 +1,4 @@
-package thrift-lib
+package thriftlib
 
 import (
 	"bytes"
