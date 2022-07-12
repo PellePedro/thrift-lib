@@ -1,4 +1,4 @@
-module github.com/pellepedro/thrift-lib
+module github.com/pellepedro/thriftlib
 
 go 1.18
 
