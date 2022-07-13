@@ -52,6 +52,43 @@ func init() {
 	bufferedTransportFactoryMap[false] = thrift.NewTTransportFactory()
 }
 
+func NewThriftClient(addr string, opt *Option, processor thrift.TProcessor) (*thrift.TStandardClient, error) {
+	protocolFactory, ok := protocolFactoryMap[opt.Protocol]
+	if !ok {
+		return nil, fmt.Errorf("unknown protocol")
+	}
+
+	var transportFactory thrift.TTransportFactory
+	cfg := &thrift.TConfiguration{
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+	transportFactory = bufferedTransportFactoryMap[opt.Buffered]
+
+	if opt.Framed {
+		transportFactory = thrift.NewTFramedTransportFactoryConf(transportFactory, cfg)
+	}
+
+	var transport thrift.TTransport
+	if opt.Secure {
+		transport = thrift.NewTSSLSocketConf(addr, cfg)
+	} else {
+		transport = thrift.NewTSocketConf(addr, cfg)
+	}
+	transport, err := transportFactory.GetTransport(transport)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get transportFactory %w n", err)
+	}
+	defer transport.Close()
+	if err := transport.Open(); err != nil {
+		return nil, fmt.Errorf("Failed to Open transport: %w", err)
+	}
+	iprot := protocolFactory.GetProtocol(transport)
+	oprot := protocolFactory.GetProtocol(transport)
+	return thrift.NewTStandardClient(iprot, oprot), nil
+}
+
 func NewThriftServer(addr string, opt *Option, processor thrift.TProcessor) (*ThriftServer, error) {
 	protocolFactory, ok := protocolFactoryMap[opt.Protocol]
 	if !ok {
