@@ -3,6 +3,7 @@ package thriftlib
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 
 	"github.com/apache/thrift/lib/go/thrift"
 )
@@ -31,7 +32,7 @@ type ThriftServer struct {
 func NewDefaultOption() *Option {
 	return &Option{
 		Protocol: BINARY,
-		Secure:   true,
+		Secure:   false,
 		Buffered: true,
 		Framed:   false,
 	}
@@ -52,10 +53,10 @@ func init() {
 	bufferedTransportFactoryMap[false] = thrift.NewTTransportFactory()
 }
 
-func NewThriftClient(addr string, opt *Option, processor thrift.TProcessor) (*thrift.TStandardClient, error) {
+func NewThriftClient(addr string, opt *Option) (*thrift.TStandardClient, io.Closer, error) {
 	protocolFactory, ok := protocolFactoryMap[opt.Protocol]
 	if !ok {
-		return nil, fmt.Errorf("unknown protocol")
+		return nil, nil, fmt.Errorf("unknown protocol")
 	}
 
 	var transportFactory thrift.TTransportFactory
@@ -78,15 +79,14 @@ func NewThriftClient(addr string, opt *Option, processor thrift.TProcessor) (*th
 	}
 	transport, err := transportFactory.GetTransport(transport)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get transportFactory %w n", err)
+		return nil, nil, fmt.Errorf("failed to get transportFactory %w n", err)
 	}
-	defer transport.Close()
 	if err := transport.Open(); err != nil {
-		return nil, fmt.Errorf("Failed to Open transport: %w", err)
+		return nil, nil, fmt.Errorf("failed to Open transport: %w", err)
 	}
 	iprot := protocolFactory.GetProtocol(transport)
 	oprot := protocolFactory.GetProtocol(transport)
-	return thrift.NewTStandardClient(iprot, oprot), nil
+	return thrift.NewTStandardClient(iprot, oprot), transport, nil
 }
 
 func NewThriftServer(addr string, opt *Option, processor thrift.TProcessor) (*ThriftServer, error) {
@@ -115,11 +115,14 @@ func NewThriftServer(addr string, opt *Option, processor thrift.TProcessor) (*Th
 			return nil, fmt.Errorf("failed to create tls certificate %w", err)
 		}
 		transport, err = thrift.NewTSSLServerSocket(addr, serverTLSConf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tls certificate %w", err)
+		}
 	} else {
 		transport, err = thrift.NewTServerSocket(addr)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to create thrift server %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create thrift server %w", err)
+		}
 	}
 	server := thrift.NewTSimpleServer4(processor, transport, transportFactory, protocolFactory)
 
@@ -129,7 +132,7 @@ func NewThriftServer(addr string, opt *Option, processor thrift.TProcessor) (*Th
 	}, nil
 }
 
-func (server *ThriftServer) start(done chan bool) chan error {
+func (server *ThriftServer) Start() chan error {
 	returnCh := make(chan error, 1)
 
 	go func() {
