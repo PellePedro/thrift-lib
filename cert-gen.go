@@ -51,7 +51,7 @@ func GenerateTls() ([]byte, []byte, error) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			Organization: []string{"Skyramp MOck"},
+			Organization: []string{"Microservices Demo"},
 		},
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(time.Hour * 24 * 180),
